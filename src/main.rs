@@ -1,5 +1,5 @@
-use eframe::{self, egui::{self, Vec2}};
-use image::{open, DynamicImage, GenericImageView, ImageBuffer, Rgba};
+use eframe::{self, egui::{self}};
+use image::{open, DynamicImage, GenericImageView, ImageBuffer, Pixel, Rgba};
 use rand::{thread_rng, Rng};
 use std::path::Path;
 
@@ -14,7 +14,9 @@ enum Algorithm {
     EdgeDetect,
     Invert,
     Mean,
+    Maximum,
     Median,
+    Minimum,
     ZoomNN,
     ZoomBilinear,
     Grayscale,
@@ -24,6 +26,7 @@ enum Algorithm {
     Binarize,
     Threshold(u8),
     SaltPepper(f32),
+    PseudoColors,
 }
 
 // Aplicação de máscara 3×3 genérica
@@ -80,6 +83,56 @@ fn median_filter(img: &DynamicImage) -> DynamicImage {
             }
             rs.sort_unstable(); gs.sort_unstable(); bs.sort_unstable();
             buf.put_pixel(x,y, Rgba([rs[4],gs[4],bs[4],a]));
+        }
+    }
+    DynamicImage::ImageRgba8(buf)
+}
+
+fn maximum_filter(img: &DynamicImage) -> DynamicImage {
+    let (w,h) = img.dimensions();
+    let pix = img.to_rgba8();
+    let mut buf = ImageBuffer::new(w,h);
+    for y in 1..h-1 {
+        for x in 1..w-1 {
+            let mut rs: Vec<Rgba<u8>> = Vec::new();
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let p = pix.get_pixel((x as i32 + dx) as u32, (y as i32 + dy) as u32);
+                    rs.push(*p);
+                }
+            }
+            // Sort by luminance (grayscale value)
+            rs.sort_by(|a, b| {
+                let lum_a = a[0] as f64 * 0.2126 + a[1] as f64 * 0.7152 + a[2] as f64 * 0.0722;
+                let lum_b = b[0] as f64 * 0.2126 + b[1] as f64 * 0.7152 + b[2] as f64 * 0.0722;
+                lum_a.partial_cmp(&lum_b).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            // Take the maximum value (last element after sorting)
+            buf.put_pixel(x, y, rs[8]);
+        }
+    }
+    DynamicImage::ImageRgba8(buf)
+}
+
+fn minimum_filter(img: &DynamicImage) -> DynamicImage {
+    let (w, h) = img.dimensions();
+    let pix = img.to_rgba8();
+    let mut buf = ImageBuffer::new(w,h);
+    for y in 1..h-1 {
+        for x in 1..w-1 {
+            let mut rs: Vec<Rgba<u8>> = Vec::new();
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let p = pix.get_pixel((x as i32 + dx) as u32, (y as i32 + dy) as u32);
+                    rs.push(*p);
+                }
+            }
+            rs.sort_by(|a, b| {
+                let lum_a = a[0] as f64 * 0.2126 + a[1] as f64 * 0.7152 + a[2] as f64 * 0.0722;
+                let lum_b = b[0] as f64 * 0.2126 + b[1] as f64 * 0.7152 + b[2] as f64 * 0.0722;
+                lum_a.partial_cmp(&lum_b).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            buf.put_pixel(x, y, rs[0]);
         }
     }
     DynamicImage::ImageRgba8(buf)
@@ -160,6 +213,12 @@ fn zoom_bilinear(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgba8(buf)
 }
 
+fn pseudo_colors(img: &DynamicImage) -> DynamicImage {
+    let (w,h) = img.dimensions();
+    let buf = ImageBuffer::new(w, h);
+    DynamicImage::ImageRgba8(buf)
+}
+
 struct PDIApp {
     input: Option<DynamicImage>,
     output: Option<DynamicImage>,
@@ -187,6 +246,8 @@ impl PDIApp {
                 Algorithm::Sharpen => apply_kernel(img, [[0.0,-1.0,0.0],[-1.0,5.0,-1.0],[0.0,-1.0,0.0]],1.0,0.0),
                 Algorithm::EdgeDetect => apply_kernel(img, [[-1.0,-1.0,-1.0],[-1.0,8.0,-1.0],[-1.0,-1.0,-1.0]],1.0,0.0),
                 Algorithm::Invert | Algorithm::Negative => { let mut o=img.clone(); o.invert(); o },
+                Algorithm::Maximum => maximum_filter(img),
+                Algorithm::Minimum => minimum_filter(img),
                 Algorithm::Mean => apply_kernel(img, [[1.0/9.0;3];3],1.0,0.0),
                 Algorithm::Median => median_filter(img),
                 Algorithm::ZoomNN => zoom_nn(img),
@@ -197,6 +258,7 @@ impl PDIApp {
                 Algorithm::Binarize => binarize(img,128),
                 Algorithm::Threshold(t) => binarize(img,t),
                 Algorithm::SaltPepper(p) => salt_pepper(img,p),
+                Algorithm::PseudoColors => todo!(),
             };
             self.output = Some(res);
         }
@@ -225,6 +287,8 @@ impl eframe::App for PDIApp {
             ui.selectable_value(&mut self.selected_algo, Algorithm::Invert, "Inverter");
             ui.selectable_value(&mut self.selected_algo, Algorithm::Mean, "Média");
             ui.selectable_value(&mut self.selected_algo, Algorithm::Median, "Mediana");
+            ui.selectable_value(&mut self.selected_algo, Algorithm::Maximum, "Maximá");
+            ui.selectable_value(&mut self.selected_algo, Algorithm::Minimum, "Minimo");
             ui.selectable_value(&mut self.selected_algo, Algorithm::Grayscale, "Converter para Cinza");
             ui.selectable_value(&mut self.selected_algo, Algorithm::Sobel, "Sobel");
             ui.selectable_value(&mut self.selected_algo, Algorithm::Laplacian, "Laplaciano");
@@ -233,8 +297,8 @@ impl eframe::App for PDIApp {
             ui.selectable_value(&mut self.selected_algo, Algorithm::SaltPepper(0.05), "Ruído Sal e Pimenta");
             ui.selectable_value(&mut self.selected_algo, Algorithm::ZoomNN, "Zoom NN 2×");
             ui.selectable_value(&mut self.selected_algo, Algorithm::ZoomBilinear, "Zoom Bilinear 2×");
-                // ... outros filtros ...
-                ui.separator();
+            // ... outros filtros ...
+            ui.separator();
             if ui.button("Aplicar").clicked() {
                 self.apply_filter();
             }
