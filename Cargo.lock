@@ -980,6 +980,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "easy_color"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a2ec16030997bd7c0592b6c530bbbaaa2c3330d1abbbdce427cd175c03ca8d0"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "ecolor"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3274,6 +3283,7 @@ dependencies = [
 name = "trabalho"
 version = "0.1.0"
 dependencies = [
+ "easy_color",
  "eframe",
  "image",
  "rand 0.9.1",

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+easy_color = "0.1.13"
 eframe = "0.26"
 image = "0.24"
 rand = "0.9.1"

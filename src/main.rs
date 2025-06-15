@@ -215,8 +215,34 @@ fn zoom_bilinear(img: &DynamicImage) -> DynamicImage {
 
 fn pseudo_colors(img: &DynamicImage) -> DynamicImage {
     let (w,h) = img.dimensions();
-    let buf = ImageBuffer::new(w, h);
+    let mut buf = ImageBuffer::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let intensity = img.get_pixel(x as u32, y as u32)[0];
+            let alpha = 255;
+            let new_pixel = match intensity {
+                0..64 => Rgba([0,0,intensity*4,alpha]),
+                64..128 => Rgba([0,(intensity-64)*4,255,alpha]),
+                128..192 => Rgba([0,255,255-(intensity-128)*4,alpha]),
+                _ => Rgba([(intensity-192)*4,255,0,alpha])
+            };
+            println!("{:?}",new_pixel);
+            buf.put_pixel(x, y, new_pixel);
+
+        }
+    }
     DynamicImage::ImageRgba8(buf)
+}
+
+fn equalize_colors(img: &DynamicImage) -> DynamicImage {
+    let (w,h) = img.dimensions();
+    let mut buf = ImageBuffer::new(w,h);
+    for y in 0..h {
+        for x in 0..w {
+            let pixel = img.get_pixel(x, y);
+        }
+    }
+    DynamicImage::ImageRgb8(buf)
 }
 
 struct PDIApp {
@@ -258,7 +284,7 @@ impl PDIApp {
                 Algorithm::Binarize => binarize(img,128),
                 Algorithm::Threshold(t) => binarize(img,t),
                 Algorithm::SaltPepper(p) => salt_pepper(img,p),
-                Algorithm::PseudoColors => todo!(),
+                Algorithm::PseudoColors => pseudo_colors(img),
             };
             self.output = Some(res);
         }
@@ -297,6 +323,7 @@ impl eframe::App for PDIApp {
             ui.selectable_value(&mut self.selected_algo, Algorithm::SaltPepper(0.05), "Ruído Sal e Pimenta");
             ui.selectable_value(&mut self.selected_algo, Algorithm::ZoomNN, "Zoom NN 2×");
             ui.selectable_value(&mut self.selected_algo, Algorithm::ZoomBilinear, "Zoom Bilinear 2×");
+            ui.selectable_value(&mut self.selected_algo, Algorithm::PseudoColors, "Criar cores");
             // ... outros filtros ...
             ui.separator();
             if ui.button("Aplicar").clicked() {
